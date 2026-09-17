@@ -9,6 +9,9 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "simulation")
 public class SimulationProperties {
 
+    /** When true, execute {@code ConsoleRunner} and do not open the JavaFX window. */
+    private boolean console;
+
     private int gridWidth;
     private int gridHeight;
     private int totalIterations;

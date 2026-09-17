@@ -59,6 +59,15 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
+            <!-- Запускает JavaFX с module-path и нативными библиотеками текущей ОС. -->
+            <plugin>
+                <groupId>org.openjfx</groupId>
+                <artifactId>javafx-maven-plugin</artifactId>
+                <version>0.0.8</version>
+                <configuration>
+                    <mainClass>com.vadim.alife.AlifeApplication</mainClass>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 </project>
