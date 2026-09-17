@@ -15,6 +15,14 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(name = "simulation.console", havingValue = "true")
 public class ConsoleRunner implements CommandLineRunner {
 
+    private static final String RESET = "[0m";
+    private static final String BOLD = "[1m";
+    private static final String GRAY = "[90m";
+    private static final String GREEN = "[32m";
+    private static final String CYAN = "[96m";
+    private static final String RED = "[91m";
+    private static final String YELLOW = "[33m";
+
     private final SimulationEngine engine;
     private final SimulationProperties properties;
 
@@ -51,7 +59,10 @@ public class ConsoleRunner implements CommandLineRunner {
 
     private void printStats(int iteration, SimulationStats stats) {
         System.out.printf(
-                "Итерация %-6d | занято клеток: %-5d | растения: %-4d | травоядные: %-4d | хищники: %-4d%n",
+                YELLOW + BOLD + "Итерация %-6d" + RESET
+                        + " | занято клеток: %-5d | " + GREEN + "растения: %-4d" + RESET
+                        + " | " + CYAN + "травоядные: %-4d" + RESET
+                        + " | " + RED + "хищники: %-4d" + RESET + "%n",
                 iteration, stats.getOccupiedCells(), stats.getPlantCount(),
                 stats.getHerbivoreCount(), stats.getPredatorCount());
     }
@@ -66,30 +77,33 @@ public class ConsoleRunner implements CommandLineRunner {
     }
 
     private void printMap(Environment environment) {
-        System.out.println("Карта (Р — растение, Т — травоядное, Х — хищник, · — пустая клетка):");
-        System.out.print("    ");
+        System.out.println("Карта (" + GREEN + "Р" + RESET + " — растение, "
+                + CYAN + "Т" + RESET + " — травоядное, "
+                + RED + "Х" + RESET + " — хищник, "
+                + GRAY + "·" + RESET + " — пустая клетка):");
+        System.out.print(GRAY + "    ");
         for (int x = 0; x < environment.getWidth(); x++) {
             System.out.print(x % 10);
         }
-        System.out.println();
+        System.out.println(RESET);
 
         for (int y = 0; y < environment.getHeight(); y++) {
-            System.out.printf("%3d ", y);
+            System.out.printf(GRAY + "%3d " + RESET, y);
             for (int x = 0; x < environment.getWidth(); x++) {
-                System.out.print(symbol(environment.getAgent(x, y)));
+                System.out.print(coloredSymbol(environment.getAgent(x, y)));
             }
             System.out.println();
         }
     }
 
-    private char symbol(Agent agent) {
+    private String coloredSymbol(Agent agent) {
         if (agent == null) {
-            return '·';
+            return GRAY + "·" + RESET;
         }
         return switch (agent.getType()) {
-            case PLANT -> 'Р';
-            case HERBIVORE -> 'Т';
-            case PREDATOR -> 'Х';
+            case PLANT -> GREEN + "Р" + RESET;
+            case HERBIVORE -> CYAN + "Т" + RESET;
+            case PREDATOR -> RED + "Х" + RESET;
         };
     }
 }

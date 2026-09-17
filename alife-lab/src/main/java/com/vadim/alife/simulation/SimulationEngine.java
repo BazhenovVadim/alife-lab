@@ -139,13 +139,17 @@ public class SimulationEngine {
 
     // ---------------- перемещения ----------------
 
-    /** Двигаться на 1 клетку к цели (кратчайший путь по тору); если цель вплотную - съесть без задержки. */
+    /** Двигаться на 1 клетку к цели (прямой путь, без выхода за край карты); если цель вплотную - съесть без задержки. */
     private void moveTowardAndConsume(Agent agent, Position target, double defaultEnergyGain) {
-        int stepX = getTorusStep(agent.getX(), target.getX(), environment.getWidth());
-        int stepY = getTorusStep(agent.getY(), target.getY(), environment.getHeight());
+        int stepX = getStep(agent.getX(), target.getX());
+        int stepY = getStep(agent.getY(), target.getY());
 
-        int nx = wrapX(agent.getX() + stepX);
-        int ny = wrapY(agent.getY() + stepY);
+        int nx = agent.getX() + stepX;
+        int ny = agent.getY() + stepY;
+
+        if (!environment.isInBounds(nx, ny)) {
+            return; // край карты - дальше двигаться некуда
+        }
 
         boolean isTargetCell = (nx == target.getX() && ny == target.getY());
 
@@ -174,13 +178,9 @@ public class SimulationEngine {
         }
     }
 
-    /** Кратчайший шаг с учётом тороидальности поля (через край может быть ближе). */
-    private int getTorusStep(int from, int to, int maxSide) {
-        int dist = to - from;
-        if (Math.abs(dist) > maxSide / 2) {
-            dist = dist > 0 ? dist - maxSide : dist + maxSide;
-        }
-        return Integer.signum(dist);
+    /** Направление на 1 клетку к цели по прямой (без выхода за границы карты). */
+    private int getStep(int from, int to) {
+        return Integer.signum(to - from);
     }
 
     /**
@@ -197,10 +197,10 @@ public class SimulationEngine {
         List<Integer> ties = new ArrayList<>();
 
         for (int i = 0; i < dx.length; i++) {
-            int nx = wrapX(agent.getX() + dx[i]);
-            int ny = wrapY(agent.getY() + dy[i]);
+            int nx = agent.getX() + dx[i];
+            int ny = agent.getY() + dy[i];
             if (!environment.isEmpty(nx, ny)) {
-                continue; // клетка занята - вариант недоступен
+                continue; // клетка занята или за краем карты - вариант недоступен
             }
 
             int minDist = Integer.MAX_VALUE;
@@ -220,8 +220,8 @@ public class SimulationEngine {
             return; // все 8 клеток заняты - физически некуда шагнуть
         }
         int choice = ties.get(random.nextInt(ties.size()));
-        int nx = wrapX(agent.getX() + dx[choice]);
-        int ny = wrapY(agent.getY() + dy[choice]);
+        int nx = agent.getX() + dx[choice];
+        int ny = agent.getY() + dy[choice];
         environment.removeAgent(agent.getX(), agent.getY());
         environment.setAgent(nx, ny, agent);
     }
@@ -279,20 +279,8 @@ public class SimulationEngine {
         return Optional.of(empty.get(random.nextInt(empty.size())));
     }
 
-    private int wrapX(int x) {
-        return ((x % environment.getWidth()) + environment.getWidth()) % environment.getWidth();
-    }
-
-    private int wrapY(int y) {
-        return ((y % environment.getHeight()) + environment.getHeight()) % environment.getHeight();
-    }
-
     private int manhattan(int x1, int y1, int x2, int y2) {
-        int dx = Math.abs(x1 - x2);
-        int dy = Math.abs(y1 - y2);
-        dx = Math.min(dx, environment.getWidth() - dx);
-        dy = Math.min(dy, environment.getHeight() - dy);
-        return dx + dy;
+        return Math.abs(x1 - x2) + Math.abs(y1 - y2);
     }
 
     private List<Agent> collectAliveAgents() {

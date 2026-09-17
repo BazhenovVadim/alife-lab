@@ -1,0 +1,130 @@
+.root {
+    -fx-background-color: linear-gradient(to bottom right, #1b2b22, #0f1a14);
+    -fx-font-family: "Segoe UI", "Arial", sans-serif;
+}
+
+.app-title {
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #eafbe7;
+}
+
+.settings-pane {
+    -fx-background-color: transparent;
+}
+
+.settings-pane > .viewport {
+    -fx-background-color: transparent;
+}
+
+.settings-card {
+    -fx-background-color: rgba(255, 255, 255, 0.05);
+    -fx-background-radius: 10;
+    -fx-border-radius: 10;
+    -fx-border-color: rgba(255, 255, 255, 0.08);
+    -fx-border-width: 1;
+}
+
+.section-label {
+    -fx-text-fill: #8fd39e;
+    -fx-font-weight: bold;
+    -fx-font-size: 12px;
+    -fx-padding: 10 0 2 0;
+}
+
+.field-label {
+    -fx-text-fill: #d7e9d9;
+    -fx-font-size: 12px;
+}
+
+.settings-card .text-field {
+    -fx-background-color: rgba(255, 255, 255, 0.08);
+    -fx-text-fill: #ffffff;
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+    -fx-border-color: rgba(255, 255, 255, 0.12);
+    -fx-prompt-text-fill: #7fa387;
+}
+
+.settings-card .text-field:focused {
+    -fx-border-color: #6fce8b;
+}
+
+.world-card {
+    -fx-background-color: rgba(255, 255, 255, 0.04);
+    -fx-background-radius: 14;
+    -fx-border-radius: 14;
+    -fx-border-color: rgba(255, 255, 255, 0.08);
+    -fx-border-width: 1;
+}
+
+.world-canvas-frame {
+    -fx-background-color: #12241a;
+    -fx-background-radius: 10;
+    -fx-border-radius: 10;
+    -fx-border-color: #335c42;
+    -fx-border-width: 2;
+}
+
+.stats-label {
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #eafbe7;
+}
+
+.status-label {
+    -fx-text-fill: #b7d6bd;
+    -fx-font-size: 12.5px;
+}
+
+.legend-label {
+    -fx-text-fill: #82a389;
+    -fx-font-size: 12px;
+}
+
+.control-bar {
+    -fx-background-color: rgba(0, 0, 0, 0.25);
+    -fx-background-radius: 12;
+    -fx-padding: 12;
+}
+
+.action-button {
+    -fx-background-radius: 20;
+    -fx-padding: 9 20 9 20;
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-cursor: hand;
+    -fx-text-fill: white;
+}
+
+.button-reset {
+    -fx-background-color: #3a5a6b;
+}
+.button-reset:hover {
+    -fx-background-color: #46708a;
+}
+
+.button-step {
+    -fx-background-color: #3f7d54;
+}
+.button-step:hover {
+    -fx-background-color: #4d9a67;
+}
+
+.button-play {
+    -fx-background-color: #cf8a2c;
+}
+.button-play:hover {
+    -fx-background-color: #e6a13f;
+}
+
+.button-play.running {
+    -fx-background-color: #b5432f;
+}
+.button-play.running:hover {
+    -fx-background-color: #cf5138;
+}
+
+.agent-symbol {
+    -fx-font-smoothing-type: lcd;
+}
