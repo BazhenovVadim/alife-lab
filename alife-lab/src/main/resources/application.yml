@@ -1,0 +1,40 @@
+spring:
+  main:
+    banner-mode: off
+logging:
+  level:
+    root: WARN
+
+simulation:
+  grid-width: 80
+  grid-height: 80
+  total-iterations: 10000
+  print-every-n-steps: 1000
+
+  initial-plants: 1300
+  initial-herbivores: 324
+  initial-predators: 40
+
+  plant-initial-energy: 5.05
+  plant-energy-per-step: 2
+  plant-energy-decay-per-step: 0
+  plant-max-energy: 40
+  plant-reproduction-threshold: 9.28
+  plant-reproduction-cost: 5.23
+
+
+  herbivore-initial-energy: 24.6
+  herbivore-energy-loss-per-step: 1.0
+  herbivore-energy-from-plant: 7
+  herbivore-reproduction-threshold: 55
+  herbivore-reproduction-cost: 18.07
+  herbivore-vision-radius: 2
+  herbivore-reproduction-cooldown-steps: 11
+
+  predator-initial-energy: 35
+  predator-energy-loss-per-step: 0.2
+  predator-energy-from-herbivore: 40
+  predator-reproduction-threshold: 40
+  predator-reproduction-cost: 10
+  predator-vision-radius: 2
+  predator-reproduction-cooldown-steps: 15
