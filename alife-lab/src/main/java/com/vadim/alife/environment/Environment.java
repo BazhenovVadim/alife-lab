@@ -10,8 +10,8 @@ import java.util.List;
 /**
  * Пространственная модель: двумерная дискретная сетка (матрица).
  * В одной клетке может находиться только один агент.
- * Сетка тороидальная (края замкнуты) - это уменьшает вымирание
- * популяций из-за "мёртвых" углов и продлевает жизнь экосистемы.
+ * Карта ограничена по краям (не тороидальная): выйти за границу
+ * или "телепортироваться" на противоположную сторону нельзя.
  */
 @Getter
 public class Environment {
@@ -26,26 +26,36 @@ public class Environment {
         this.grid = new Agent[height][width];
     }
 
+    public boolean isInBounds(int x, int y) {
+        return x >= 0 && x < width && y >= 0 && y < height;
+    }
+
     public Agent getAgent(int x, int y) {
-        return grid[wrapY(y)][wrapX(x)];
+        if (!isInBounds(x, y)) {
+            return null;
+        }
+        return grid[y][x];
     }
 
     public void setAgent(int x, int y, Agent agent) {
-        int wx = wrapX(x);
-        int wy = wrapY(y);
-        grid[wy][wx] = agent;
+        if (!isInBounds(x, y)) {
+            throw new IllegalArgumentException("Координаты (" + x + ", " + y + ") вне границ карты");
+        }
+        grid[y][x] = agent;
         if (agent != null) {
-            agent.setX(wx);
-            agent.setY(wy);
+            agent.setX(x);
+            agent.setY(y);
         }
     }
 
     public void removeAgent(int x, int y) {
-        grid[wrapY(y)][wrapX(x)] = null;
+        if (isInBounds(x, y)) {
+            grid[y][x] = null;
+        }
     }
 
     public boolean isEmpty(int x, int y) {
-        return getAgent(x, y) == null;
+        return isInBounds(x, y) && grid[y][x] == null;
     }
 
     public List<Position> getNeighbors(int x, int y, int radius) {
@@ -55,17 +65,13 @@ public class Environment {
                 if (dx == 0 && dy == 0) {
                     continue;
                 }
-                result.add(new Position(wrapX(x + dx), wrapY(y + dy)));
+                int nx = x + dx;
+                int ny = y + dy;
+                if (isInBounds(nx, ny)) {
+                    result.add(new Position(nx, ny));
+                }
             }
         }
         return result;
-    }
-
-    private int wrapX(int x) {
-        return ((x % width) + width) % width;
-    }
-
-    private int wrapY(int y) {
-        return ((y % height) + height) % height;
     }
 }
