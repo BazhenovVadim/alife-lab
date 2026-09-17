@@ -105,7 +105,8 @@ public class SimulationEngine {
         } else {
             Optional<Position> plant = findNearest(herbivore.getX(), herbivore.getY(), radius, AgentType.PLANT);
             if (plant.isPresent()) {
-                moveTowardAndConsume(herbivore, plant.get(), props.getHerbivoreEnergyFromPlant());
+                // Энергия растения не ограничивается настройкой: заяц забирает весь запас цветка.
+                moveTowardAndConsume(herbivore, plant.get(), 0);
             } else {
                 randomWalk(herbivore);
             }
