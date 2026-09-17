@@ -1,6 +1,11 @@
 package com.vadim.alife;
 
-import org.springframework.boot.SpringApplication;
+import com.vadim.alife.ui.EcosystemFxApplication;
+import com.vadim.alife.config.SimulationProperties;
+import javafx.application.Application;
+import org.springframework.boot.WebApplicationType;
+import org.springframework.boot.builder.SpringApplicationBuilder;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 
@@ -8,7 +13,25 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 @ConfigurationPropertiesScan
 public class AlifeApplication {
 
+    private static ConfigurableApplicationContext context;
+
     public static void main(String[] args) {
-        SpringApplication.run(AlifeApplication.class, args);
+        context = new SpringApplicationBuilder(AlifeApplication.class)
+                .web(WebApplicationType.NONE)
+                .run(args);
+        if (context.getBean(SimulationProperties.class).isConsole()) {
+            return;
+        }
+        Application.launch(EcosystemFxApplication.class, args);
+    }
+
+    public static <T> T getBean(Class<T> type) {
+        return context.getBean(type);
+    }
+
+    public static void closeContext() {
+        if (context != null) {
+            context.close();
+        }
     }
 }

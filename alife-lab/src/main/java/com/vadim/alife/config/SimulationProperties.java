@@ -9,6 +9,9 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "simulation")
 public class SimulationProperties {
 
+    /** When true, execute {@code ConsoleRunner} and do not open the JavaFX window. */
+    private boolean console;
+
     private int gridWidth;
     private int gridHeight;
     private int totalIterations;
@@ -27,7 +30,6 @@ public class SimulationProperties {
 
     private double herbivoreInitialEnergy;
     private double herbivoreEnergyLossPerStep;
-    private double herbivoreEnergyFromPlant;
     private double herbivoreReproductionThreshold;
     private double herbivoreReproductionCost;
     private int herbivoreVisionRadius;
