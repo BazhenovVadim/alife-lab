@@ -98,10 +98,10 @@ public class SimulationEngine {
         }
 
         int radius = props.getHerbivoreVisionRadius();
-        List<Position> predators = findAll(herbivore.getX(), herbivore.getY(), radius, AgentType.PREDATOR);
+        List<Position> threats = findThreateningPredators(herbivore.getX(), herbivore.getY(), radius);
 
-        if (!predators.isEmpty()) {
-            fleeFromAll(herbivore, predators);
+        if (!threats.isEmpty()) {
+            fleeFromAll(herbivore, threats);
         } else {
             Optional<Position> plant = findNearest(herbivore.getX(), herbivore.getY(), radius, AgentType.PLANT);
             if (plant.isPresent()) {
@@ -246,15 +246,33 @@ public class SimulationEngine {
     }
 
 
-    private List<Position> findAll(int x, int y, int radius, AgentType type) {
+    /**
+     * Хищники, которые реально угрожают травоядному в этот ход. Хищник, полностью
+     * зажатый соседями (со всех 8 сторон нет ни пустой клетки, ни травоядного, на
+     * которое можно напасть), физически не может сдвинуться или атаковать - такого
+     * незачем бояться, иначе жертвы будут вечно обходить стороной "клетку в клетке",
+     * даже когда хищник уже не опасен.
+     */
+    private List<Position> findThreateningPredators(int x, int y, int radius) {
         List<Position> result = new ArrayList<>();
         for (Position pos : environment.getNeighbors(x, y, radius)) {
             Agent a = environment.getAgent(pos.getX(), pos.getY());
-            if (a != null && a.getType() == type) {
+            if (a != null && a.getType() == AgentType.PREDATOR && canAct(a)) {
                 result.add(pos);
             }
         }
         return result;
+    }
+
+    /** Может ли агент в этот ход сдвинуться или атаковать - то есть не заблокирован ли он соседями со всех сторон. */
+    private boolean canAct(Agent agent) {
+        for (Position pos : environment.getNeighbors(agent.getX(), agent.getY(), 1)) {
+            Agent neighbor = environment.getAgent(pos.getX(), pos.getY());
+            if (neighbor == null || neighbor.getType() == AgentType.HERBIVORE) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private Optional<Position> findNearest(int x, int y, int radius, AgentType type) {
