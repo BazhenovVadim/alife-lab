@@ -1,7 +1,6 @@
 package com.vadim.alife;
 
 import com.vadim.alife.ui.EcosystemFxApplication;
-import com.vadim.alife.config.SimulationProperties;
 import javafx.application.Application;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
@@ -19,9 +18,6 @@ public class AlifeApplication {
         context = new SpringApplicationBuilder(AlifeApplication.class)
                 .web(WebApplicationType.NONE)
                 .run(args);
-        if (context.getBean(SimulationProperties.class).isConsole()) {
-            return;
-        }
         Application.launch(EcosystemFxApplication.class, args);
     }
 

@@ -38,8 +38,7 @@ import java.util.function.Supplier;
 /** JavaFX interface for configuring, stepping and observing the ecosystem. */
 public class EcosystemFxApplication extends Application {
 
-    // Оставляем место для панели управления даже при масштабировании интерфейса ОС.
-    private static final int CANVAS_SIZE = 600;
+    private static final int CANVAS_SIZE = 760;
     private final Map<String, TextField> fields = new LinkedHashMap<>();
     private SimulationEngine engine;
     private SimulationProperties properties;
@@ -62,7 +61,7 @@ public class EcosystemFxApplication extends Application {
         root.setBottom(createControls());
 
         stage.setTitle("Искусственная жизнь — экосистема");
-        stage.setScene(new Scene(root, 1040, 760));
+        stage.setScene(new Scene(root, 1120, 860));
         stage.setMinWidth(900);
         stage.setMinHeight(700);
         stage.setOnCloseRequest(event -> {
@@ -190,10 +189,7 @@ public class EcosystemFxApplication extends Application {
         double usedHeight = cell * environment.getHeight();
         double offsetX = (CANVAS_SIZE - usedWidth) / 2;
         double offsetY = (CANVAS_SIZE - usedHeight) / 2;
-        // Цвет нужно установить повторно: до этого он используется для фона canvas.
-        // Без этого текст рисуется тем же светло-зелёным цветом и визуально исчезает.
-        graphics.setFill(Color.web("#183b20"));
-        graphics.setFont(Font.font("Segoe UI Emoji", Math.max(6, Math.min(18, cell * 1.2))));
+        graphics.setFont(Font.font(Math.max(4, Math.min(18, cell * 1.05))));
         graphics.setTextAlign(javafx.scene.text.TextAlignment.CENTER);
         graphics.setTextBaseline(javafx.geometry.VPos.CENTER);
         for (int y = 0; y < environment.getHeight(); y++) {
