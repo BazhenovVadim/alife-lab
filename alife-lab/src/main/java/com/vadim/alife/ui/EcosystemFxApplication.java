@@ -18,10 +18,13 @@ import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.control.Tab;
+import javafx.scene.control.TabPane;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
@@ -30,7 +33,8 @@ import javafx.scene.layout.Pane;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
-import javafx.scene.text.Font;
+import javafx.scene.paint.Color;
+import javafx.scene.shape.Circle;
 import javafx.stage.Stage;
 import javafx.util.Duration;
 
@@ -45,67 +49,180 @@ import java.util.function.Supplier;
 /** JavaFX интерфейс для настройки, пошагового и автоматического запуска экосистемы. */
 public class EcosystemFxApplication extends Application {
 
-    private static final int CANVAS_SIZE = 760;
+    private static final Duration TICK_DURATION = Duration.millis(180);
     private static final Duration MOVE_DURATION = Duration.millis(170);
     private static final Duration SPAWN_DURATION = Duration.millis(220);
     private static final Duration DEATH_DURATION = Duration.millis(240);
 
     private final Map<String, TextField> fields = new LinkedHashMap<>();
-    private final Map<Agent, Label> agentNodes = new IdentityHashMap<>();
+    private final Map<Agent, Circle> agentNodes = new IdentityHashMap<>();
 
     private SimulationEngine engine;
     private SimulationProperties properties;
     private Pane worldPane;
+    private Label stepLabel;
     private Label statsLabel;
     private Label statusLabel;
     private Button automaticButton;
     private Timeline timer;
     private boolean initialized;
+    private int currentStep;
 
     @Override
     public void start(Stage stage) {
         engine = AlifeApplication.getBean(SimulationEngine.class);
         properties = AlifeApplication.getBean(SimulationProperties.class);
 
-        worldPane = new Pane();
-        worldPane.setPrefSize(CANVAS_SIZE, CANVAS_SIZE);
-        worldPane.setMinSize(CANVAS_SIZE, CANVAS_SIZE);
-        worldPane.setMaxSize(CANVAS_SIZE, CANVAS_SIZE);
-        worldPane.getStyleClass().add("world-canvas-frame");
-        worldPane.setOnMouseClicked(event -> stepOnce());
+        TabPane tabPane = new TabPane();
+        tabPane.getTabs().addAll(createWorldTab(), createSettingsTab());
+
+        Label title = new Label("🌍 Искусственная жизнь — экосистема");
+        title.getStyleClass().add("app-title");
+        VBox header = new VBox(title);
+        header.setPadding(new Insets(16, 20, 4, 20));
 
         BorderPane root = new BorderPane();
         root.getStyleClass().add("root");
-        root.setTop(createHeader());
-        root.setLeft(createSettingsPane());
-        root.setCenter(createWorldPane());
-        root.setBottom(createControls());
+        root.setTop(header);
+        root.setCenter(tabPane);
 
-        Scene scene = new Scene(root, 1160, 900);
+        Scene scene = new Scene(root, 1280, 860);
         scene.getStylesheets().add(getClass().getResource("/style.css").toExternalForm());
 
         stage.setTitle("Искусственная жизнь — экосистема");
         stage.setScene(scene);
-        stage.setMinWidth(940);
-        stage.setMinHeight(740);
+        stage.setMinWidth(980);
+        stage.setMinHeight(700);
         stage.setOnCloseRequest(event -> {
             stopTimer();
             AlifeApplication.closeContext();
             Platform.exit();
         });
+        stage.setMaximized(true);
         stage.show();
         resetSimulation();
     }
 
-    private VBox createHeader() {
-        Label title = new Label("🌍 Искусственная жизнь — экосистема");
-        title.getStyleClass().add("app-title");
-        VBox box = new VBox(title);
-        box.setPadding(new Insets(16, 20, 4, 20));
-        return box;
+    // ---------------- вкладка "Мир" ----------------
+
+    private Tab createWorldTab() {
+        stepLabel = new Label("Шаг: 0");
+        stepLabel.getStyleClass().add("step-label");
+        statsLabel = new Label();
+        statsLabel.getStyleClass().add("stats-label");
+        HBox infoBar = new HBox(28, stepLabel, statsLabel);
+        infoBar.setAlignment(Pos.CENTER_LEFT);
+
+        worldPane = new Pane();
+        worldPane.getStyleClass().add("world-canvas-frame");
+        worldPane.setOnMouseClicked(event -> stepOnce());
+        worldPane.widthProperty().addListener((obs, oldV, newV) -> relayout());
+        worldPane.heightProperty().addListener((obs, oldV, newV) -> relayout());
+
+        StackPane frame = new StackPane(worldPane);
+        VBox.setVgrow(frame, Priority.ALWAYS);
+
+        statusLabel = new Label("Настройте параметры и запустите симуляцию.");
+        statusLabel.getStyleClass().add("status-label");
+
+        HBox legend = createLegend();
+        HBox controls = createControls();
+
+        VBox content = new VBox(12, infoBar, frame, statusLabel, legend, controls);
+        content.setMaxWidth(Double.MAX_VALUE);
+        content.setMaxHeight(Double.MAX_VALUE);
+        content.setPadding(new Insets(16, 20, 16, 20));
+
+        Tab tab = new Tab("Мир", content);
+        tab.setClosable(false);
+        return tab;
     }
 
-    private ScrollPane createSettingsPane() {
+    private HBox createLegend() {
+        HBox legend = new HBox(20,
+                legendItem(colorFor(AgentType.PLANT), "Растение"),
+                legendItem(colorFor(AgentType.HERBIVORE), "Травоядное"),
+                legendItem(colorFor(AgentType.PREDATOR), "Хищник"),
+                new Label("•  карта ограничена: выйти за край нельзя"));
+        legend.getStyleClass().add("legend-box");
+        legend.setAlignment(Pos.CENTER_LEFT);
+        return legend;
+    }
+
+    private HBox legendItem(Color color, String text) {
+        Circle dot = new Circle(6, color);
+        Label label = new Label(text);
+        label.getStyleClass().add("legend-label");
+        HBox item = new HBox(6, dot, label);
+        item.setAlignment(Pos.CENTER_LEFT);
+        return item;
+    }
+
+    private HBox createControls() {
+        automaticButton = new Button("▶  Автоматический режим");
+        automaticButton.getStyleClass().addAll("action-button", "button-play");
+        automaticButton.setOnAction(event -> toggleAutomatic());
+
+        TextField stepsField = new TextField("1");
+        stepsField.setPrefColumnCount(4);
+        stepsField.getStyleClass().add("steps-field");
+
+        Button stepsButton = new Button("⏭  Выполнить");
+        stepsButton.getStyleClass().addAll("action-button", "button-step");
+        stepsButton.setOnAction(event -> {
+            try {
+                int count = Integer.parseInt(stepsField.getText().trim());
+                runSteps(count);
+            } catch (NumberFormatException exception) {
+                statusLabel.setText("Введите целое число шагов.");
+            }
+        });
+
+        Label stepsCaption = new Label("Шагов:");
+        stepsCaption.getStyleClass().add("field-label");
+        HBox stepsGroup = new HBox(8, stepsCaption, stepsField, stepsButton);
+        stepsGroup.getStyleClass().add("steps-group");
+        stepsGroup.setAlignment(Pos.CENTER);
+
+        HBox bar = new HBox(20, automaticButton, stepsGroup);
+        bar.getStyleClass().add("control-bar");
+        bar.setPadding(new Insets(14, 20, 14, 20));
+        bar.setAlignment(Pos.CENTER);
+        return bar;
+    }
+
+    private void toggleAutomatic() {
+        if (timer != null && timer.getStatus() == Timeline.Status.RUNNING) {
+            stopTimer();
+        } else {
+            if (!initialized) {
+                resetSimulation();
+            }
+            timer = new Timeline(new KeyFrame(TICK_DURATION, tick -> stepOnce()));
+            timer.setCycleCount(Timeline.INDEFINITE);
+            timer.play();
+            automaticButton.setText("⏸  Остановить");
+            automaticButton.getStyleClass().add("running");
+        }
+    }
+
+    private void runSteps(int count) {
+        if (count <= 0) {
+            statusLabel.setText("Количество шагов должно быть больше нуля.");
+            return;
+        }
+        stopTimer();
+        if (!initialized) {
+            resetSimulation();
+        }
+        timer = new Timeline(new KeyFrame(TICK_DURATION, tick -> stepOnce()));
+        timer.setCycleCount(count);
+        timer.play();
+    }
+
+    // ---------------- вкладка "Настройки" ----------------
+
+    private Tab createSettingsTab() {
         GridPane grid = new GridPane();
         grid.setHgap(8);
         grid.setVgap(7);
@@ -139,68 +256,29 @@ public class EcosystemFxApplication extends Application {
         addDouble(grid, "Цена размножения волка", properties::getPredatorReproductionCost, properties::setPredatorReproductionCost);
         addInt(grid, "Пауза размножения волка", properties::getPredatorReproductionCooldownSteps, properties::setPredatorReproductionCooldownSteps);
 
-        ScrollPane pane = new ScrollPane(grid);
-        pane.getStyleClass().add("settings-pane");
-        pane.setFitToWidth(true);
-        pane.setPrefWidth(320);
-        pane.setMinWidth(270);
-        pane.setPadding(new Insets(12, 0, 12, 12));
-        return pane;
+        ScrollPane scroll = new ScrollPane(grid);
+        scroll.getStyleClass().add("settings-pane");
+        scroll.setFitToWidth(true);
+        VBox.setVgrow(scroll, Priority.ALWAYS);
+
+        Button apply = new Button("🔄  Применить настройки и создать новую экосистему");
+        apply.getStyleClass().addAll("action-button", "button-reset");
+        apply.setOnAction(event -> resetSimulation());
+        HBox applyBar = new HBox(apply);
+        applyBar.setAlignment(Pos.CENTER);
+        applyBar.setPadding(new Insets(14, 0, 4, 0));
+
+        VBox content = new VBox(8, scroll, applyBar);
+        content.setMaxWidth(Double.MAX_VALUE);
+        content.setMaxHeight(Double.MAX_VALUE);
+        content.setPadding(new Insets(16, 20, 16, 20));
+
+        Tab tab = new Tab("Настройки", content);
+        tab.setClosable(false);
+        return tab;
     }
 
-    private VBox createWorldPane() {
-        statsLabel = new Label();
-        statsLabel.getStyleClass().add("stats-label");
-        statusLabel = new Label("Настройте параметры и запустите симуляцию.");
-        statusLabel.getStyleClass().add("status-label");
-        Label legend = new Label("🌸 растение   🐇 травоядное   🐺 хищник   •   карта ограничена: выйти за край нельзя");
-        legend.getStyleClass().add("legend-label");
-
-        StackPane frame = new StackPane(worldPane);
-        frame.setPadding(new Insets(4));
-
-        VBox box = new VBox(10, statsLabel, frame, statusLabel, legend);
-        box.getStyleClass().add("world-card");
-        box.setPadding(new Insets(18));
-        box.setAlignment(Pos.TOP_CENTER);
-
-        VBox wrapper = new VBox(box);
-        wrapper.setPadding(new Insets(12, 18, 12, 12));
-        return wrapper;
-    }
-
-    private HBox createControls() {
-        Button reset = new Button("🔄  Применить настройки / Сбросить");
-        reset.getStyleClass().addAll("action-button", "button-reset");
-        reset.setOnAction(event -> resetSimulation());
-
-        Button step = new Button("⏭  Шаг симуляции");
-        step.getStyleClass().addAll("action-button", "button-step");
-        step.setOnAction(event -> stepOnce());
-
-        automaticButton = new Button("▶  Запустить приложение");
-        automaticButton.getStyleClass().addAll("action-button", "button-play");
-        automaticButton.setOnAction(event -> {
-            if (timer != null && timer.getStatus() == Timeline.Status.RUNNING) {
-                stopTimer();
-            } else {
-                if (!initialized) {
-                    resetSimulation();
-                }
-                timer = new Timeline(new KeyFrame(Duration.millis(180), tick -> stepOnce()));
-                timer.setCycleCount(Timeline.INDEFINITE);
-                timer.play();
-                automaticButton.setText("⏸  Остановить");
-                automaticButton.getStyleClass().add("running");
-            }
-        });
-
-        HBox bar = new HBox(14, reset, step, automaticButton);
-        bar.getStyleClass().add("control-bar");
-        bar.setPadding(new Insets(14, 20, 18, 20));
-        bar.setAlignment(Pos.CENTER);
-        return bar;
-    }
+    // ---------------- симуляция ----------------
 
     private void resetSimulation() {
         stopTimer();
@@ -208,6 +286,7 @@ public class EcosystemFxApplication extends Application {
             applySettings();
             engine.initialize();
             initialized = true;
+            currentStep = 0;
             clearWorld();
             statusLabel.setText("Новая экосистема создана. Можно запускать автоматически или выполнять шаги вручную.");
             redraw();
@@ -225,6 +304,7 @@ public class EcosystemFxApplication extends Application {
             return;
         }
         engine.step();
+        currentStep++;
         redraw();
         if (engine.isEcosystemCollapsed()) {
             stopTimer();
@@ -237,13 +317,23 @@ public class EcosystemFxApplication extends Application {
         agentNodes.clear();
     }
 
-    private void redraw() {
-        Environment environment = engine.getEnvironment();
-        double cell = Math.min(CANVAS_SIZE / (double) environment.getWidth(), CANVAS_SIZE / (double) environment.getHeight());
+    // ---------------- отрисовка ----------------
+
+    private record WorldMetrics(double cell, double offsetX, double offsetY) {
+    }
+
+    private WorldMetrics computeMetrics(Environment environment) {
+        double paneWidth = Math.max(worldPane.getWidth(), 100);
+        double paneHeight = Math.max(worldPane.getHeight(), 100);
+        double cell = Math.min(paneWidth / environment.getWidth(), paneHeight / environment.getHeight());
         double usedWidth = cell * environment.getWidth();
         double usedHeight = cell * environment.getHeight();
-        double offsetX = (CANVAS_SIZE - usedWidth) / 2;
-        double offsetY = (CANVAS_SIZE - usedHeight) / 2;
+        return new WorldMetrics(cell, (paneWidth - usedWidth) / 2, (paneHeight - usedHeight) / 2);
+    }
+
+    private void redraw() {
+        Environment environment = engine.getEnvironment();
+        WorldMetrics metrics = computeMetrics(environment);
 
         Set<Agent> alive = new HashSet<>();
         for (int y = 0; y < environment.getHeight(); y++) {
@@ -253,13 +343,13 @@ public class EcosystemFxApplication extends Application {
                     continue;
                 }
                 alive.add(agent);
-                double targetX = offsetX + x * cell;
-                double targetY = offsetY + y * cell;
-                Label node = agentNodes.get(agent);
+                double targetX = metrics.offsetX() + x * metrics.cell();
+                double targetY = metrics.offsetY() + y * metrics.cell();
+                Circle node = agentNodes.get(agent);
                 if (node == null) {
-                    spawnAgentNode(agent, cell, targetX, targetY);
+                    spawnAgentNode(agent, metrics.cell(), targetX, targetY);
                 } else {
-                    resizeAgentNode(node, cell);
+                    resizeAgentNode(node, metrics.cell());
                     animateMove(node, targetX, targetY);
                 }
             }
@@ -273,15 +363,41 @@ public class EcosystemFxApplication extends Application {
             return true;
         });
 
+        stepLabel.setText("Шаг: " + currentStep);
         SimulationStats stats = engine.collectStats();
-        statsLabel.setText(String.format("Занято: %d | 🌸 %d | 🐇 %d | 🐺 %d",
+        statsLabel.setText(String.format("Занято: %d  •  Растения: %d  •  Травоядные: %d  •  Хищники: %d",
                 stats.getOccupiedCells(), stats.getPlantCount(), stats.getHerbivoreCount(), stats.getPredatorCount()));
     }
 
+    /** Пересчитывает положение уже существующих агентов при изменении размера окна, без анимации. */
+    private void relayout() {
+        if (!initialized) {
+            return;
+        }
+        Environment environment = engine.getEnvironment();
+        WorldMetrics metrics = computeMetrics(environment);
+        for (int y = 0; y < environment.getHeight(); y++) {
+            for (int x = 0; x < environment.getWidth(); x++) {
+                Agent agent = environment.getAgent(x, y);
+                if (agent == null) {
+                    continue;
+                }
+                Circle node = agentNodes.get(agent);
+                if (node != null) {
+                    resizeAgentNode(node, metrics.cell());
+                    node.setLayoutX(metrics.offsetX() + x * metrics.cell());
+                    node.setLayoutY(metrics.offsetY() + y * metrics.cell());
+                }
+            }
+        }
+    }
+
     private void spawnAgentNode(Agent agent, double cell, double x, double y) {
-        Label node = new Label(symbol(agent.getType()));
-        node.getStyleClass().add("agent-symbol");
-        resizeAgentNode(node, cell);
+        Circle node = new Circle(cell * 0.38, colorFor(agent.getType()));
+        node.setStroke(Color.web("#33413a", 0.35));
+        node.setStrokeWidth(1);
+        node.setCenterX(cell / 2.0);
+        node.setCenterY(cell / 2.0);
         node.setLayoutX(x);
         node.setLayoutY(y);
         node.setOpacity(0);
@@ -298,14 +414,14 @@ public class EcosystemFxApplication extends Application {
         new ParallelTransition(fade, scale).play();
     }
 
-    private void animateMove(Label node, double targetX, double targetY) {
+    private void animateMove(Node node, double targetX, double targetY) {
         Timeline timeline = new Timeline(new KeyFrame(MOVE_DURATION,
                 new KeyValue(node.layoutXProperty(), targetX, Interpolator.EASE_BOTH),
                 new KeyValue(node.layoutYProperty(), targetY, Interpolator.EASE_BOTH)));
         timeline.play();
     }
 
-    private void animateDeath(Label node) {
+    private void animateDeath(Node node) {
         FadeTransition fade = new FadeTransition(DEATH_DURATION, node);
         fade.setToValue(0);
         ScaleTransition scale = new ScaleTransition(DEATH_DURATION, node);
@@ -316,20 +432,21 @@ public class EcosystemFxApplication extends Application {
         death.play();
     }
 
-    private void resizeAgentNode(Label node, double cell) {
-        node.setPrefWidth(cell);
-        node.setPrefHeight(cell);
-        node.setAlignment(Pos.CENTER);
-        node.setFont(Font.font(Math.max(6, Math.min(22, cell * 0.95))));
+    private void resizeAgentNode(Circle node, double cell) {
+        node.setRadius(cell * 0.38);
+        node.setCenterX(cell / 2.0);
+        node.setCenterY(cell / 2.0);
     }
 
-    private String symbol(AgentType type) {
+    private Color colorFor(AgentType type) {
         return switch (type) {
-            case PLANT -> "🌸";
-            case HERBIVORE -> "🐇";
-            case PREDATOR -> "🐺";
+            case PLANT -> Color.web("#2ecc71");
+            case HERBIVORE -> Color.web("#2f8fe0");
+            case PREDATOR -> Color.web("#e0473c");
         };
     }
+
+    // ---------------- настройки ----------------
 
     private void applySettings() {
         fields.forEach((name, field) -> {
@@ -385,7 +502,7 @@ public class EcosystemFxApplication extends Application {
             timer.stop();
         }
         if (automaticButton != null) {
-            automaticButton.setText("▶  Запустить приложение");
+            automaticButton.setText("▶  Автоматический режим");
             automaticButton.getStyleClass().remove("running");
         }
     }
