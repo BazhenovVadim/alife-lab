@@ -27,7 +27,6 @@ public class SimulationProperties {
 
     private double herbivoreInitialEnergy;
     private double herbivoreEnergyLossPerStep;
-    private double herbivoreEnergyFromPlant;
     private double herbivoreReproductionThreshold;
     private double herbivoreReproductionCost;
     private int herbivoreVisionRadius;

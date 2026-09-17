@@ -6,10 +6,12 @@ logging:
     root: WARN
 
 simulation:
+  console: false
   grid-width: 80
   grid-height: 80
   total-iterations: 10000
-  print-every-n-steps: 1000
+  # В консольном режиме карта и статистика выводятся с этой периодичностью.
+  print-every-n-steps: 100
 
   initial-plants: 1300
   initial-herbivores: 324
@@ -25,7 +27,6 @@ simulation:
 
   herbivore-initial-energy: 24.6
   herbivore-energy-loss-per-step: 1.0
-  herbivore-energy-from-plant: 7
   herbivore-reproduction-threshold: 55
   herbivore-reproduction-cost: 18.07
   herbivore-vision-radius: 2
