@@ -37,10 +37,7 @@ public class TrainingService {
 
     /** Один обучающий эпизод: мышь действует ε-жадно и после каждого шага обновляет Q-таблицу. */
     public EpisodeStats trainEpisode(TrainingSession session, Consumer<StepResult> onStep) {
-        EpisodeStats stats = runEpisode(session, true, onStep);
-        session.getAgent().decayEpsilon();
-        session.getHistory().add(stats);
-        return stats;
+        return runEpisode(session, true, onStep);
     }
 
     public List<EpisodeStats> train(TrainingSession session, int episodes,
@@ -79,40 +76,69 @@ public class TrainingService {
                 last.stream().mapToInt(EpisodeStats::getWaterDrunk).average().orElse(0));
     }
 
-    private EpisodeStats runEpisode(TrainingSession session, boolean learn, Consumer<StepResult> onStep) {
-        MazeEnvironment environment = session.getEnvironment();
+    /**
+     * Один шаг мыши. Если эпизод не начат (или предыдущий завершён), он начинается со старта.
+     * При {@code learn=true} шаг ε-жадный с обновлением Q, а завершённый эпизод попадает в историю.
+     * При {@code learn=false} шаг жадный, без обучения.
+     */
+    public StepResult step(TrainingSession session, boolean learn) {
+        EpisodeProgress progress = session.getProgress();
+        if (progress == null || progress.isLearning() != learn) {
+            progress = beginEpisode(session, learn);
+        }
         QLearningAgent agent = session.getAgent();
-        MouseState state = environment.reset();
-        double epsilon = agent.getEpsilon();
-        int water = 0;
-        int shocks = 0;
-        int wallHits = 0;
-        StepResult result;
-        do {
-            Action action = agent.chooseAction(state, learn);
-            result = environment.step(action);
-            if (learn) {
-                agent.update(state, action, result.reward(), result.state(), result.terminal());
-            }
-            switch (result.event()) {
-                case WATER -> water++;
-                case SHOCK -> shocks++;
-                case WALL_HIT -> wallHits++;
-                default -> { }
-            }
-            onStep.accept(result);
-            state = result.state();
-        } while (!result.done());
+        MouseState state = progress.getState();
+        Action action = agent.chooseAction(state, learn);
+        StepResult result = session.getEnvironment().step(action);
+        if (learn) {
+            agent.update(state, action, result.reward(), result.state(), result.terminal());
+        }
+        progress.record(result);
+        if (result.done()) {
+            finishEpisode(session, progress, result);
+        }
+        return result;
+    }
 
-        return EpisodeStats.builder()
+    /** Прерывает незавершённый пошаговый эпизод: следующий шаг начнётся со старта. */
+    public void abandonEpisode(TrainingSession session) {
+        session.setProgress(null);
+    }
+
+    private EpisodeProgress beginEpisode(TrainingSession session, boolean learn) {
+        MouseState start = session.getEnvironment().reset();
+        EpisodeProgress progress = new EpisodeProgress(start, learn, session.getAgent().getEpsilon());
+        session.setProgress(progress);
+        return progress;
+    }
+
+    private void finishEpisode(TrainingSession session, EpisodeProgress progress, StepResult last) {
+        MazeEnvironment environment = session.getEnvironment();
+        EpisodeStats stats = EpisodeStats.builder()
                 .episode(session.episodesDone() + 1)
                 .totalReward(environment.getTotalReward())
                 .steps(environment.getSteps())
-                .cheeseFound(result.terminal())
-                .waterDrunk(water)
-                .shocks(shocks)
-                .wallHits(wallHits)
-                .epsilon(epsilon)
+                .cheeseFound(last.terminal())
+                .waterDrunk(progress.getWaterDrunk())
+                .shocks(progress.getShocks())
+                .wallHits(progress.getWallHits())
+                .epsilon(progress.getEpsilonAtStart())
                 .build();
+        if (progress.isLearning()) {
+            session.getAgent().decayEpsilon();
+            session.getHistory().add(stats);
+        }
+        session.setLastEpisode(stats);
+        session.setProgress(null);
+    }
+
+    private EpisodeStats runEpisode(TrainingSession session, boolean learn, Consumer<StepResult> onStep) {
+        beginEpisode(session, learn);
+        StepResult result;
+        do {
+            result = step(session, learn);
+            onStep.accept(result);
+        } while (!result.done());
+        return session.getLastEpisode();
     }
 }

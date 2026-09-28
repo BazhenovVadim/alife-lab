@@ -49,4 +49,54 @@ class TrainingServiceTest {
         assertThat(path.get(path.size() - 1).terminal()).isTrue();
         assertThat(session.getAgent().getEpsilon()).isLessThan(0.1);
     }
+
+    @Test
+    void stepByStepEpisodeContinuesFromCurrentPositionAndIsRecordedWhenDone() {
+        Maze maze = new MazeParser().parse("""
+                ######
+                #CEWM#
+                ######
+                """);
+        TrainingSession session = service.createSession(maze);
+        session.getAgent().getLearning().setEpsilonStart(0);
+        session.getAgent().resetEpsilon();
+
+        StepResult first = service.step(session, true);
+        assertThat(session.isEpisodeInProgress()).isTrue();
+        assertThat(session.getEnvironment().getSteps()).isEqualTo(1);
+
+        StepResult last = first;
+        int guard = 0;
+        while (!last.done() && guard++ < 1000) {
+            StepResult next = service.step(session, true);
+            assertThat(session.getEnvironment().getSteps()).isEqualTo(guard + 1);
+            last = next;
+        }
+
+        assertThat(last.done()).isTrue();
+        assertThat(session.isEpisodeInProgress()).isFalse();
+        assertThat(session.getHistory()).hasSize(1);
+        assertThat(session.getLastEpisode().getSteps()).isEqualTo(session.getEnvironment().getSteps());
+        assertThat(session.getLastEpisode().getTotalReward()).isEqualTo(session.getEnvironment().getTotalReward());
+
+        service.step(session, true);
+        assertThat(session.getEnvironment().getSteps()).as("новый эпизод со старта").isEqualTo(1);
+    }
+
+    @Test
+    void greedyRunDoesNotLearnAndInterruptsManualEpisode() {
+        Maze maze = new MazeGenerator().generate(3, 3, 1, 1, 0.1, 2L);
+        TrainingSession session = service.createSession(maze);
+        service.step(session, true);
+        service.step(session, true);
+        int knownStates = session.getAgent().knownStates();
+
+        List<StepResult> path = service.greedyRun(session);
+
+        assertThat(path.get(0).state().position()).isNotNull();
+        assertThat(session.getHistory()).isEmpty();
+        assertThat(session.isEpisodeInProgress()).isFalse();
+        assertThat(session.getAgent().knownStates()).isEqualTo(knownStates);
+        assertThat(session.getEnvironment().getSteps()).isEqualTo(path.size());
+    }
 }

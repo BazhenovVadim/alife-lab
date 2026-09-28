@@ -3,13 +3,16 @@ package com.vadim.maze.ui;
 import com.vadim.maze.configuration.LearningProperties;
 import com.vadim.maze.configuration.MazeProperties;
 import com.vadim.maze.configuration.RewardProperties;
+import com.vadim.maze.model.Action;
 import com.vadim.maze.model.CellType;
 import com.vadim.maze.model.EpisodeStats;
 import com.vadim.maze.model.Maze;
+import com.vadim.maze.model.MouseState;
 import com.vadim.maze.model.Position;
 import com.vadim.maze.model.StepEvent;
 import com.vadim.maze.model.StepResult;
 import com.vadim.maze.model.TrainingSummary;
+import com.vadim.maze.service.MazeEnvironment;
 import com.vadim.maze.service.MazeService;
 import com.vadim.maze.service.MazeValidator;
 import com.vadim.maze.service.TrainingService;
@@ -97,6 +100,7 @@ public class MazeWindow {
     private final Label eventLabel = new Label("—");
     private final Label lastRewardLabel = new Label("—");
     private final Label totalLabel = new Label("0");
+    private final Label qLabel = new Label("—");
 
     private final ToggleButton editToggle = new ToggleButton("Рисовать");
     private final ComboBox<CellType> brush = new ComboBox<>();
@@ -231,6 +235,10 @@ public class MazeWindow {
         walk.addRow(row++, new Label("Событие"), eventLabel);
         walk.addRow(row++, new Label("Награда за шаг"), lastRewardLabel);
         walk.addRow(row++, new Label("Сумма выигрыша"), totalLabel);
+        qLabel.setStyle("-fx-font-family: monospace;");
+        qLabel.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+        qLabel.setTooltip(new Tooltip("Q-значения клетки до шага «Шаг»; * — выбранное действие"));
+        walk.addRow(row++, new Label("Q(s,·) до шага"), qLabel);
 
         rewardSeries.setName("Средняя награда за эпизод");
         successSeries.setName("Сыр найден, %");
@@ -253,17 +261,21 @@ public class MazeWindow {
 
     private Node controlBar() {
         Button train = button("▶ Обучить", this::startTraining);
-        Button stop = button("■ Стоп", () -> stopRequested = true);
+        Button stop = button("■ Стоп", this::stopAll);
+        Button step = button("Шаг ▸", this::manualStep);
         Button episode = button("Эпизод с обучением", this::animateTrainingEpisode);
         Button walk = button("Пройти лабиринт", this::animateGreedyRun);
         Button reset = button("Сбросить опыт", this::resetSession);
         train.setTooltip(new Tooltip("Фоновое обучение на заданное число эпизодов"));
         episode.setTooltip(new Tooltip("Один ε-жадный эпизод с обновлением Q-таблицы, показывается анимацией"));
         walk.setTooltip(new Tooltip("Проход по выученной политике без случайных шагов и без обучения"));
+        step.setTooltip(new Tooltip("Мышь делает один ε-жадный ход с обновлением Q; эпизод продолжается с того же места"));
+        stop.setTooltip(new Tooltip("Остановить обучение или анимацию прохода"));
 
         train.disableProperty().bind(busy.or(noSession));
         episode.disableProperty().bind(busy.or(noSession));
         walk.disableProperty().bind(busy.or(noSession));
+        step.disableProperty().bind(busy.or(noSession));
         reset.disableProperty().bind(busy.or(noSession));
         stop.disableProperty().bind(busy.not());
 
@@ -277,7 +289,7 @@ public class MazeWindow {
         trail.selectedProperty().addListener((o, a, b) -> { canvas.setShowTrail(b); canvas.redraw(); });
         speed.setPrefWidth(140);
 
-        FlowPane bar = new FlowPane(8, 6, train, stop, new Separator(), episode, walk, reset, new Separator(),
+        FlowPane bar = new FlowPane(8, 6, train, stop, new Separator(), step, episode, walk, reset, new Separator(),
                 new Label("Скорость, шаг/с"), speed, policy, values, trail);
         bar.setAlignment(Pos.CENTER_LEFT);
         bar.setPadding(new Insets(8));
@@ -433,6 +445,76 @@ public class MazeWindow {
         worker.start();
     }
 
+    /** «Стоп»: прерывает и фоновое обучение, и анимацию прохода. */
+    private void stopAll() {
+        stopRequested = true;
+        if (playback != null) {
+            int shown = playback.index;
+            int total = playback.steps.size();
+            stopPlayback();
+            canvas.redraw();
+            setStatus("Показ остановлен на шаге " + shown + " из " + total + ".", false);
+        }
+    }
+
+    /** Один шаг мыши с обучением — видно, что выбрано, что ответила среда и как изменилось Q. */
+    private void manualStep() {
+        stopPlayback();
+        boolean newEpisode = !session.isEpisodeInProgress();
+        MouseState before = newEpisode ? new MouseState(maze.getStart(), 0L) : session.getProgress().getState();
+        if (newEpisode) {
+            log.getItems().clear();
+            log.getItems().add("— Пошаговый эпизод " + (session.episodesDone() + 1)
+                    + " (ε=" + fmt(session.getAgent().getEpsilon(), 3) + ") —");
+            canvas.clearTrail();
+            canvas.addTrail(maze.getStart());
+        }
+        double[] qBefore = session.getAgent().qValues(before);
+        StepResult result = trainingService.step(session, true);
+        double[] qAfter = session.getAgent().qValues(before);
+        int a = result.action().ordinal();
+        boolean greedy = qBefore[a] >= java.util.Arrays.stream(qBefore).max().orElse(0);
+
+        MazeEnvironment environment = session.getEnvironment();
+        canvas.setMouse(result.state().position());
+        canvas.setWaterMask(result.state().waterMask());
+        canvas.addTrail(result.state().position());
+        showStep(environment.getSteps(), result, environment.getTotalReward(), true);
+        qLabel.setText(formatQ(qBefore, a));
+        log.getItems().add(String.format("    %s: Q %s → %s", greedy ? "жадный ход" : "случайный ход (ε)",
+                fmt(qBefore[a], 1), fmt(qAfter[a], 1)));
+        log.scrollTo(log.getItems().size() - 1);
+
+        refreshStats();
+        if (result.done()) {
+            EpisodeStats stats = session.getLastEpisode();
+            addChartPoint(stats.getEpisode(), trainingService.summarize(session, 1));
+            setStatus("Пошаговый эпизод " + stats.getEpisode() + " завершён: "
+                    + (result.terminal() ? "сыр найден" : "лимит шагов") + " за " + stats.getSteps()
+                    + " шагов, сумма выигрыша " + fmt(stats.getTotalReward(), 1)
+                    + ". Следующий «Шаг» начнёт новый эпизод.", !result.terminal());
+        } else {
+            setStatus("Пошаговый режим: " + (greedy ? "жадный" : "случайный") + " ход "
+                    + result.action().getArrow() + ", " + eventTitle(result.event()) + " "
+                    + signed(result.reward()) + ", сумма " + fmt(environment.getTotalReward(), 1), false);
+        }
+        canvas.redraw();
+    }
+
+    private static String formatQ(double[] q, int chosen) {
+        StringBuilder sb = new StringBuilder();
+        for (Action action : Action.values()) {
+            int i = action.ordinal();
+            if (i == 2) {
+                sb.append('\n');
+            } else if (i > 0) {
+                sb.append("  ");
+            }
+            sb.append(action.getArrow()).append(String.format("%6.1f", q[i])).append(i == chosen ? '*' : ' ');
+        }
+        return sb.toString();
+    }
+
     private void animateTrainingEpisode() {
         stopPlayback();
         List<StepResult> steps = new java.util.ArrayList<>();
@@ -454,7 +536,8 @@ public class MazeWindow {
         canvas.setMouse(maze.getStart());
         canvas.setWaterMask(0);
         canvas.addTrail(maze.getStart());
-        showStep(0, null, 0);
+        showStep(0, null, 0, false);
+        qLabel.setText("—");
         busy.set(true);
         playback = new Playback(steps, title);
         playback.start();
@@ -495,7 +578,7 @@ public class MazeWindow {
                 canvas.setMouse(step.state().position());
                 canvas.setWaterMask(step.state().waterMask());
                 canvas.addTrail(step.state().position());
-                showStep(index, step, total);
+                showStep(index, step, total, false);
             }
             canvas.redraw();
             if (index >= steps.size()) {
@@ -510,7 +593,7 @@ public class MazeWindow {
         }
     }
 
-    private void showStep(int number, StepResult step, double total) {
+    private void showStep(int number, StepResult step, double total, boolean logEveryStep) {
         stepLabel.setText(String.valueOf(number));
         totalLabel.setText(fmt(total, 1));
         if (step == null) {
@@ -520,7 +603,7 @@ public class MazeWindow {
         }
         eventLabel.setText(eventTitle(step.event()));
         lastRewardLabel.setText(signed(step.reward()));
-        if (step.event() != StepEvent.MOVE || step.done()) {
+        if (logEveryStep || step.event() != StepEvent.MOVE || step.done()) {
             log.getItems().add(String.format("%3d %s %-8s %-6s %6s Σ%7s", number, step.action().getArrow(),
                     step.state().position(), eventTitle(step.event()), signed(step.reward()), fmt(total, 1)));
             if (log.getItems().size() > LOG_LIMIT) {
@@ -561,6 +644,7 @@ public class MazeWindow {
         }
         stepLabel.setText("0");
         totalLabel.setText("0");
+        qLabel.setText("—");
         episodesLabel.setText("0");
         statesLabel.setText("0");
         epsilonLabel.setText(session == null ? "—" : fmt(session.getAgent().getEpsilon(), 3));
