@@ -1,0 +1,32 @@
+@startuml component
+!pragma layout smetana
+title Диаграмма компонентов
+
+node "JVM (Java 21)" {
+  component "Spring Boot\nApplicationContext" as Spring
+  package "maze-mouse.jar" {
+    component "configuration" as Conf
+    component "model" as Model
+    component "service" as Svc
+    component "ui (JavaFX)" as UI
+    component "runner (консоль)" as Runner
+  }
+  component "JavaFX 21\n(javafx-controls)" as FX
+  component "Lombok\n(compile-time)" as Lombok
+}
+artifact "application.yml" as Yml
+artifact "схема лабиринта *.txt" as Txt
+
+Yml --> Conf : @ConfigurationProperties
+Spring --> Conf : связывает свойства
+Spring --> Svc : создаёт бины @Service
+Svc --> Model
+Svc --> Conf
+UI --> Svc : MazeService,\nTrainingService
+UI --> FX
+Runner --> Svc
+Svc --> Txt : загрузка / сохранение
+Model ..> Lombok
+Conf ..> Lombok
+Svc ..> Lombok
+@enduml

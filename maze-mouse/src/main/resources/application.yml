@@ -1,0 +1,39 @@
+spring:
+  main:
+    banner-mode: off
+  application:
+    name: maze-mouse
+
+logging:
+  level:
+    root: warn
+    com.vadim.maze: info
+
+app:
+  mode: gui          # gui | console
+
+maze:
+  width: 8           # в «комнатах», сетка = 2*width+1
+  height: 8
+  water-count: 6
+  shock-count: 6
+  loop-factor: 0.15  # 0 — ровно один путь до сыра
+  seed:              # пусто — случайный лабиринт
+  schema-file:       # например: classpath:mazes/example.txt или путь к файлу
+
+reward:
+  cheese: 100        # +Z
+  water: 10          # +x
+  shock: -30         # -y
+  step: -1
+  wall-hit: -5
+
+learning:
+  alpha: 0.5
+  gamma: 0.97
+  epsilon-start: 1.0
+  epsilon-min: 0.02
+  epsilon-decay: 0.998
+  initial-q: 100     # оптимистичная начальная оценка Q (≈ +Z) — стимул исследовать
+  episodes: 3000
+  max-steps: 0       # 0 — авто

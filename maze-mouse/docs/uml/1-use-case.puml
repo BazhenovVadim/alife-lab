@@ -1,0 +1,50 @@
+@startuml use-case
+!pragma layout smetana
+caption Диаграмма прецедентов — «Мышь в лабиринте»
+left to right direction
+skinparam packageStyle rectangle
+
+actor "Пользователь\n(исследователь)" as User
+actor "Мышь\n(агент RL)" as Mouse <<system>>
+
+rectangle "Приложение maze-mouse" {
+  usecase "Задать размер и параметры\nлабиринта" as UC1
+  usecase "Сгенерировать лабиринт" as UC2
+  usecase "Задать схему лабиринта\n(текст / файл / рисование)" as UC3
+  usecase "Сохранить схему в файл" as UC4
+  usecase "Настроить награды\n(+Z, +x, −y, шаг, стена)" as UC5
+  usecase "Настроить гиперпараметры\nQ-learning (α, γ, ε)" as UC6
+  usecase "Обучить мышь" as UC7
+  usecase "Выполнить эпизод\nс обучением" as UC8
+  usecase "Показать проход по\nвыученной политике" as UC9
+  usecase "Наблюдать сумму\nвыигрыша/проигрыша" as UC10
+  usecase "Просматривать графики\nи статистику обучения" as UC11
+  usecase "Проверить схему\n(мышь, сыр, достижимость)" as UC12
+  usecase "Выбрать действие\n(ε-жадно)" as UC13
+  usecase "Получить подкрепление\nот среды" as UC14
+  usecase "Обновить Q-таблицу" as UC15
+}
+
+User --> UC1
+User --> UC3
+User --> UC4
+User --> UC5
+User --> UC6
+User --> UC7
+User --> UC8
+User --> UC9
+User --> UC11
+UC1 ..> UC2 : <<include>>
+UC2 ..> UC12 : <<include>>
+UC3 ..> UC12 : <<include>>
+UC7 ..> UC8 : <<include>>
+UC8 ..> UC10 : <<extend>>
+UC9 ..> UC10 : <<include>>
+
+Mouse --> UC13
+Mouse --> UC14
+Mouse --> UC15
+UC8 ..> UC13 : <<include>>
+UC8 ..> UC14 : <<include>>
+UC8 ..> UC15 : <<include>>
+@enduml

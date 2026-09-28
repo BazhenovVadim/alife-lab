@@ -1,0 +1,198 @@
+@startuml class
+!pragma layout smetana
+title Диаграмма классов
+skinparam classAttributeIconSize 0
+hide empty members
+
+package configuration {
+  class MazeProperties <<@ConfigurationProperties "maze">> {
+    width : int
+    height : int
+    waterCount : int
+    shockCount : int
+    loopFactor : double
+    seed : Long
+    schemaFile : String
+  }
+  class RewardProperties <<@ConfigurationProperties "reward">> {
+    cheese : double  // +Z
+    water : double   // +x
+    shock : double   // −y
+    step : double
+    wallHit : double
+  }
+  class LearningProperties <<@ConfigurationProperties "learning">> {
+    alpha : double
+    gamma : double
+    epsilonStart : double
+    epsilonMin : double
+    epsilonDecay : double
+    initialQ : double
+    episodes : int
+    maxSteps : int
+  }
+  class AppProperties <<@ConfigurationProperties "app">> {
+    mode : Mode
+  }
+  class RandomConfiguration <<@Configuration>> {
+    + explorationRandom() : RandomGenerator
+  }
+}
+
+package model {
+  enum CellType {
+    WALL
+    EMPTY
+    START
+    CHEESE
+    WATER
+    SHOCK
+    + symbol : char
+    + isPassable() : boolean
+  }
+  enum Action {
+    UP
+    DOWN
+    LEFT
+    RIGHT
+    + dx : int
+    + dy : int
+  }
+  enum StepEvent {
+    MOVE
+    WALL_HIT
+    WATER
+    SHOCK
+    CHEESE
+    TIMEOUT
+  }
+  class Position <<record>> {
+    x : int
+    y : int
+    + move(a : Action) : Position
+  }
+  class MouseState <<record>> {
+    position : Position
+    waterMask : long
+    + drink(i : int) : MouseState
+  }
+  class StepResult <<record>> {
+    state : MouseState
+    action : Action
+    reward : double
+    event : StepEvent
+    terminal : boolean
+    truncated : boolean
+  }
+  class Maze {
+    - cells : CellType[][]
+    + get(p : Position) : CellType
+    + set(p : Position, t : CellType)
+    + getStart() : Position
+    + getCheese() : Position
+    + waterIndex() : Map<Position,Integer>
+    + toText() : String
+  }
+  class EpisodeStats <<@Value>> {
+    episode : int
+    totalReward : double
+    steps : int
+    cheeseFound : boolean
+    waterDrunk : int
+    shocks : int
+    epsilon : double
+  }
+  class TrainingSummary <<record>>
+}
+
+package service {
+  class MazeGenerator <<@Service>> {
+    + generate(w, h, water, shock, loops, seed) : Maze
+  }
+  class MazeParser <<@Service>> {
+    + parse(text : String) : Maze
+  }
+  class MazeValidator <<@Service>> {
+    + validate(m : Maze) : List<String>
+    + isReachable(m, from, to) : boolean
+  }
+  class MazeService <<@Service>> {
+    + initialMaze() : Maze
+    + generate(p : MazeProperties) : Maze
+    + parse(text) : Maze
+    + load(location) : Maze
+    + save(m, file)
+  }
+  class MazeEnvironment {
+    - state : MouseState
+    - steps : int
+    - totalReward : double
+    + reset() : MouseState
+    + step(a : Action) : StepResult
+  }
+  class QLearningAgent {
+    - qTable : Map<MouseState, double[]>
+    - epsilon : double
+    + chooseAction(s, explore) : Action
+    + bestAction(s, randomTie) : Action
+    + update(s, a, r, s', terminal)
+    + decayEpsilon()
+  }
+  class TrainingSession {
+    history : List<EpisodeStats>
+  }
+  class TrainingService <<@Service>> {
+    + createSession(m : Maze) : TrainingSession
+    + trainEpisode(session, onStep) : EpisodeStats
+    + train(session, n, onEpisode, cancelled)
+    + greedyRun(session) : List<StepResult>
+    + summarize(session, window) : TrainingSummary
+  }
+}
+
+package ui {
+  class MazeFxApplication <<javafx.Application>>
+  class MazeWindow
+  class MazeCanvas <<javafx.Pane>>
+}
+package runner {
+  class ConsoleRunner <<CommandLineRunner>>
+}
+class MazeMouseApplication <<@SpringBootApplication>>
+
+Maze "1" *-- "many" CellType
+MouseState *-- Position
+StepResult *-- MouseState
+StepResult --> Action
+StepResult --> StepEvent
+Position ..> Action
+
+MazeService --> MazeGenerator
+MazeService --> MazeParser
+MazeService --> MazeValidator
+MazeService --> MazeProperties
+MazeGenerator ..> Maze : создаёт
+MazeParser ..> Maze : создаёт
+
+TrainingService --> RewardProperties
+TrainingService --> LearningProperties
+TrainingService ..> TrainingSession : создаёт
+TrainingSession *-- MazeEnvironment
+TrainingSession *-- QLearningAgent
+TrainingSession o-- Maze
+TrainingSession *-- "many" EpisodeStats
+MazeEnvironment --> Maze
+MazeEnvironment --> RewardProperties
+MazeEnvironment ..> StepResult : возвращает
+QLearningAgent --> LearningProperties
+QLearningAgent ..> MouseState
+
+MazeMouseApplication ..> MazeFxApplication : запускает
+MazeFxApplication *-- MazeWindow
+MazeWindow *-- MazeCanvas
+MazeWindow --> MazeService
+MazeWindow --> TrainingService
+MazeCanvas --> QLearningAgent
+ConsoleRunner --> MazeService
+ConsoleRunner --> TrainingService
+@enduml

@@ -1,0 +1,44 @@
+@startuml sequence
+title Диаграмма взаимодействий (последовательности) — обучение и проход
+
+actor Пользователь as U
+participant MazeWindow as W
+participant TrainingService as T
+participant QLearningAgent as A
+participant MazeEnvironment as E
+participant MazeCanvas as C
+
+U -> W : «▶ Обучить»
+W -> T : train(session, N, onEpisode, cancelled)
+activate T
+loop N эпизодов (фоновый поток)
+  T -> E : reset()
+  E --> T : s₀
+  loop пока не сыр и не лимит
+    T -> A : chooseAction(s, explore=true)
+    A --> T : a
+    T -> E : step(a)
+    E --> T : StepResult(s', r, event, terminal)
+    T -> A : update(s, a, r, s', terminal)
+  end
+  T -> A : decayEpsilon()
+  T -> W : onEpisode(stats)
+  W -> C : redraw() [каждые N/150 эпизодов, Platform.runLater]
+end
+deactivate T
+W --> U : графики награды и % успеха
+
+U -> W : «Пройти лабиринт»
+W -> T : greedyRun(session)
+activate T
+loop до сыра / лимита
+  T -> A : chooseAction(s, explore=false)
+  T -> E : step(a)
+end
+T --> W : List<StepResult>
+deactivate T
+loop анимация (AnimationTimer)
+  W -> C : setMouse(pos), addTrail(pos)
+  W --> U : шаг, событие, награда, Σ выигрыша
+end
+@enduml
