@@ -9,8 +9,7 @@ simulation:
   console: false
   grid-width: 80
   grid-height: 80
-  total-iterations: 10000
-  # В консольном режиме карта и статистика выводятся с этой периодичностью.
+  total-iterations: 1000
   print-every-n-steps: 100
 
   initial-plants: 1300
@@ -21,8 +20,8 @@ simulation:
   plant-energy-per-step: 2
   plant-energy-decay-per-step: 0
   plant-max-energy: 40
-  plant-reproduction-threshold: 9.28
-  plant-reproduction-cost: 5.23
+  plant-reproduction-threshold: 13
+  plant-reproduction-cost: 6.5
 
 
   herbivore-initial-energy: 24.6
