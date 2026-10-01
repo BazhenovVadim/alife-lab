@@ -55,11 +55,10 @@ public class SimulationEngine {
     public void step() {
         List<Agent> snapshot = collectAliveAgents();
         Collections.shuffle(snapshot, random);
-        // хищники ходят первыми - логичный порядок "охотник действует активно, жертва реагирует"
+        // хищники ходят первыми
         snapshot.sort(Comparator.comparingInt(a -> a.getType() == AgentType.PREDATOR ? 0 : 1));
 
         for (Agent agent : snapshot) {
-            // агент мог быть съеден другим агентом раньше в этом же шаге
             if (environment.getAgent(agent.getX(), agent.getY()) != agent) {
                 continue;
             }
@@ -105,7 +104,6 @@ public class SimulationEngine {
         } else {
             Optional<Position> plant = findNearest(herbivore.getX(), herbivore.getY(), radius, AgentType.PLANT);
             if (plant.isPresent()) {
-                // Энергия растения не ограничивается настройкой: заяц забирает весь запас цветка.
                 moveTowardAndConsume(herbivore, plant.get(), 0);
             } else {
                 randomWalk(herbivore);
@@ -124,7 +122,6 @@ public class SimulationEngine {
         }
 
         int radius = props.getPredatorVisionRadius();
-        // ищем только травоядных: на клетку с растением хищник встать не может
         Optional<Position> prey = findNearest(predator.getX(), predator.getY(), radius, AgentType.HERBIVORE);
 
         if (prey.isPresent()) {
@@ -139,13 +136,26 @@ public class SimulationEngine {
 
     // ---------------- перемещения ----------------
 
-    /** Двигаться на 1 клетку к цели (кратчайший путь по тору); если цель вплотную - съесть без задержки. */
     private void moveTowardAndConsume(Agent agent, Position target, double defaultEnergyGain) {
-        int stepX = getTorusStep(agent.getX(), target.getX(), environment.getWidth());
-        int stepY = getTorusStep(agent.getY(), target.getY(), environment.getHeight());
+        // ИЗМЕНЕНИЕ: Используем линейный шаг, а не тороидальный.
+        int stepX = getLinearStep(agent.getX(), target.getX());
+        int stepY = getLinearStep(agent.getY(), target.getY());
 
-        int nx = wrapX(agent.getX() + stepX);
-        int ny = wrapY(agent.getY() + stepY);
+        if (stepX != 0 && stepY != 0) {
+            if (random.nextBoolean()) {
+                stepX = 0;
+            } else {
+                stepY = 0;
+            }
+        }
+
+        int nx = agent.getX() + stepX;
+        int ny = agent.getY() + stepY;
+
+        // ИЗМЕНЕНИЕ: Защита от выхода за карту.
+        if (!isValid(nx, ny)) {
+            return;
+        }
 
         boolean isTargetCell = (nx == target.getX() && ny == target.getY());
 
@@ -153,12 +163,10 @@ public class SimulationEngine {
             Agent prey = environment.getAgent(nx, ny);
 
             if (prey == null) {
-                // жертву уже съел кто-то другой в этот же шаг - просто занимаем освободившуюся клетку
                 environment.removeAgent(agent.getX(), agent.getY());
                 environment.setAgent(nx, ny, agent);
             } else {
                 double gainedEnergy = defaultEnergyGain;
-                // травоядное, поедая растение, забирает всю накопленную им энергию
                 if (agent.getType() == AgentType.HERBIVORE && prey.getType() == AgentType.PLANT) {
                     gainedEnergy = prey.getEnergy();
                 }
@@ -174,33 +182,25 @@ public class SimulationEngine {
         }
     }
 
-    /** Кратчайший шаг с учётом тороидальности поля (через край может быть ближе). */
-    private int getTorusStep(int from, int to, int maxSide) {
-        int dist = to - from;
-        if (Math.abs(dist) > maxSide / 2) {
-            dist = dist > 0 ? dist - maxSide : dist + maxSide;
-        }
-        return Integer.signum(dist);
+    /** ИЗМЕНЕНИЕ: Обычный линейный шаг к цели. */
+    private int getLinearStep(int from, int to) {
+        return Integer.signum(to - from);
     }
 
-    /**
-     * Побег от ВСЕХ видимых хищников сразу, а не только от ближайшего.
-     * Перебирает 8 соседних клеток (без варианта "остаться на месте" - двигаться
-     * обязан, стоять на месте могут только растения) и выбирает ту, что
-     * максимизирует минимальное расстояние до любого из хищников.
-     */
     private void fleeFromAll(Agent agent, List<Position> threats) {
-        int[] dx = {-1, -1, -1, 0, 0, 1, 1, 1};
-        int[] dy = {-1, 0, 1, -1, 1, -1, 0, 1};
+        int[] dx = {0, 0, -1, 1};
+        int[] dy = {-1, 1, 0, 0};
 
         int bestScore = Integer.MIN_VALUE;
         List<Integer> ties = new ArrayList<>();
 
         for (int i = 0; i < dx.length; i++) {
-            int nx = wrapX(agent.getX() + dx[i]);
-            int ny = wrapY(agent.getY() + dy[i]);
-            if (!environment.isEmpty(nx, ny)) {
-                continue; // клетка занята - вариант недоступен
+            int nx = agent.getX() + dx[i];
+            int ny = agent.getY() + dy[i];
+
+            // ИЗМЕНЕНИЕ: Не рассматриваем шаги за пределы карты.
+            if (!isValid(nx, ny) || !environment.isEmpty(nx, ny)) {
+                continue;
             }
 
             int minDist = Integer.MAX_VALUE;
@@ -217,11 +217,11 @@ public class SimulationEngine {
         }
 
         if (ties.isEmpty()) {
-            return; // все 8 клеток заняты - физически некуда шагнуть
+            return; // все 4 клетки заняты или за краем карты
         }
         int choice = ties.get(random.nextInt(ties.size()));
-        int nx = wrapX(agent.getX() + dx[choice]);
-        int ny = wrapY(agent.getY() + dy[choice]);
+        int nx = agent.getX() + dx[choice];
+        int ny = agent.getY() + dy[choice];
         environment.removeAgent(agent.getX(), agent.getY());
         environment.setAgent(nx, ny, agent);
     }
@@ -237,7 +237,7 @@ public class SimulationEngine {
         if (parent.getEnergy() > threshold && parent.getAge() >= cooldownSteps) {
             findRandomEmptyNeighbor(parent.getX(), parent.getY()).ifPresent(pos -> {
                 parent.setEnergy(parent.getEnergy() - childEnergy);
-                parent.setAge(0); // родитель "восстанавливается" после размножения
+                parent.setAge(0);
                 Agent child = factory.get();
                 child.setEnergy(childEnergy);
                 environment.setAgent(pos.getX(), pos.getY(), child);
@@ -249,6 +249,10 @@ public class SimulationEngine {
     private List<Position> findAll(int x, int y, int radius, AgentType type) {
         List<Position> result = new ArrayList<>();
         for (Position pos : environment.getNeighbors(x, y, radius)) {
+            // ИЗМЕНЕНИЕ: Отсеиваем невалидные координаты, если класс Environment вернул их по старой логике
+            if (!isValid(pos.getX(), pos.getY()) || manhattan(x, y, pos.getX(), pos.getY()) > radius) {
+                continue;
+            }
             Agent a = environment.getAgent(pos.getX(), pos.getY());
             if (a != null && a.getType() == type) {
                 result.add(pos);
@@ -259,6 +263,9 @@ public class SimulationEngine {
 
     private Optional<Position> findNearest(int x, int y, int radius, AgentType type) {
         return environment.getNeighbors(x, y, radius).stream()
+                // ИЗМЕНЕНИЕ: Аналогичная фильтрация для поиска ближайшего
+                .filter(pos -> isValid(pos.getX(), pos.getY()))
+                .filter(pos -> manhattan(x, y, pos.getX(), pos.getY()) <= radius)
                 .filter(pos -> {
                     Agent a = environment.getAgent(pos.getX(), pos.getY());
                     return a != null && a.getType() == type;
@@ -269,8 +276,14 @@ public class SimulationEngine {
     private Optional<Position> findRandomEmptyNeighbor(int x, int y) {
         List<Position> empty = new ArrayList<>();
         for (Position pos : environment.getNeighbors(x, y, 1)) {
-            if (environment.isEmpty(pos.getX(), pos.getY())) {
-                empty.add(pos);
+            // ИЗМЕНЕНИЕ: Проверяем, что клетка внутри карты
+            if (!isValid(pos.getX(), pos.getY())) {
+                continue;
+            }
+            if (manhattan(x, y, pos.getX(), pos.getY()) == 1) {
+                if (environment.isEmpty(pos.getX(), pos.getY())) {
+                    empty.add(pos);
+                }
             }
         }
         if (empty.isEmpty()) {
@@ -279,20 +292,14 @@ public class SimulationEngine {
         return Optional.of(empty.get(random.nextInt(empty.size())));
     }
 
-    private int wrapX(int x) {
-        return ((x % environment.getWidth()) + environment.getWidth()) % environment.getWidth();
+    /** ИЗМЕНЕНИЕ: Метод проверки того, что координаты находятся строго внутри границ карты. */
+    private boolean isValid(int x, int y) {
+        return x >= 0 && x < environment.getWidth() && y >= 0 && y < environment.getHeight();
     }
 
-    private int wrapY(int y) {
-        return ((y % environment.getHeight()) + environment.getHeight()) % environment.getHeight();
-    }
-
+    /** ИЗМЕНЕНИЕ: Стандартная Манхэттенская дистанция без учета границ "через край". */
     private int manhattan(int x1, int y1, int x2, int y2) {
-        int dx = Math.abs(x1 - x2);
-        int dy = Math.abs(y1 - y2);
-        dx = Math.min(dx, environment.getWidth() - dx);
-        dy = Math.min(dy, environment.getHeight() - dy);
-        return dx + dy;
+        return Math.abs(x1 - x2) + Math.abs(y1 - y2);
     }
 
     private List<Agent> collectAliveAgents() {
